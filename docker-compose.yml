@@ -1,5 +1,3 @@
-version: '3.5'
-
 networks:
   frontend:
     driver: ${NETWORKS_DRIVER}
@@ -74,6 +72,7 @@ services:
           - INSTALL_GMP=${WORKSPACE_INSTALL_GMP}
           - INSTALL_GNUPG=${WORKSPACE_INSTALL_GNUPG}
           - INSTALL_XDEBUG=${WORKSPACE_INSTALL_XDEBUG}
+          - XDEBUG_PORT=${WORKSPACE_XDEBUG_PORT}
           - INSTALL_PCOV=${WORKSPACE_INSTALL_PCOV}
           - INSTALL_PHPDBG=${WORKSPACE_INSTALL_PHPDBG}
           - INSTALL_BLACKFIRE=${INSTALL_BLACKFIRE}
@@ -103,6 +102,7 @@ services:
           - INSTALL_NPM_BOWER=${WORKSPACE_INSTALL_NPM_BOWER}
           - INSTALL_NPM_VUE_CLI=${WORKSPACE_INSTALL_NPM_VUE_CLI}
           - INSTALL_NPM_ANGULAR_CLI=${WORKSPACE_INSTALL_NPM_ANGULAR_CLI}
+          - INSTALL_NPM_CHECK_UPDATES_CLI=${WORKSPACE_INSTALL_NPM_CHECK_UPDATES_CLI}
           - INSTALL_DRUSH=${WORKSPACE_INSTALL_DRUSH}
           - INSTALL_WP_CLI=${WORKSPACE_INSTALL_WP_CLI}
           - INSTALL_DRUPAL_CONSOLE=${WORKSPACE_INSTALL_DRUPAL_CONSOLE}
@@ -129,12 +129,14 @@ services:
           - INSTALL_TERRAFORM=${WORKSPACE_INSTALL_TERRAFORM}
           - INSTALL_DUSK_DEPS=${WORKSPACE_INSTALL_DUSK_DEPS}
           - INSTALL_PG_CLIENT=${WORKSPACE_INSTALL_PG_CLIENT}
+          - PG_CLIENT_VERSION=${POSTGRES_CLIENT_VERSION}
           - INSTALL_PHALCON=${WORKSPACE_INSTALL_PHALCON}
           - INSTALL_SWOOLE=${WORKSPACE_INSTALL_SWOOLE}
           - INSTALL_TAINT=${WORKSPACE_INSTALL_TAINT}
           - INSTALL_LIBPNG=${WORKSPACE_INSTALL_LIBPNG}
           - INSTALL_GRAPHVIZ=${WORKSPACE_INSTALL_GRAPHVIZ}
           - INSTALL_IONCUBE=${WORKSPACE_INSTALL_IONCUBE}
+          - INSTALL_APCU=${WORKSPACE_INSTALL_APCU}
           - INSTALL_MYSQL_CLIENT=${WORKSPACE_INSTALL_MYSQL_CLIENT}
           - INSTALL_PING=${WORKSPACE_INSTALL_PING}
           - INSTALL_SSHPASS=${WORKSPACE_INSTALL_SSHPASS}
@@ -162,6 +164,7 @@ services:
           - INSTALL_FFMPEG=${WORKSPACE_INSTALL_FFMPEG}
           - INSTALL_AUDIOWAVEFORM=${WORKSPACE_INSTALL_AUDIOWAVEFORM}
           - INSTALL_WKHTMLTOPDF=${WORKSPACE_INSTALL_WKHTMLTOPDF}
+          - WKHTMLTOPDF_VERSION=${WORKSPACE_WKHTMLTOPDF_VERSION}
           - INSTALL_GNU_PARALLEL=${WORKSPACE_INSTALL_GNU_PARALLEL}
           - INSTALL_LNAV=${WORKSPACE_INSTALL_LNAV}
           - INSTALL_PROTOC=${WORKSPACE_INSTALL_PROTOC}
@@ -172,6 +175,10 @@ services:
           - PROTOC_VERSION=${WORKSPACE_PROTOC_VERSION}
           - INSTALL_DOCKER_CLIENT=${WORKSPACE_INSTALL_DOCKER_CLIENT}
           - INSTALL_MEMCACHED=${WORKSPACE_INSTALL_MEMCACHED}
+          - INSTALL_EVENT=${WORKSPACE_INSTALL_EVENT}
+          - INSTALL_DNSUTILS=${WORKSPACE_INSTALL_DNSUTILS}
+          - INSTALL_POPPLER_UTILS=${WORKSPACE_INSTALL_POPPLER_UTILS}
+          - INSTALL_JDK=${WORKSPACE_INSTALL_JDK}
           - http_proxy
           - https_proxy
           - no_proxy
@@ -188,6 +195,7 @@ services:
         - "${WORKSPACE_VUE_CLI_SERVE_HOST_PORT}:8080"
         - "${WORKSPACE_VUE_CLI_UI_HOST_PORT}:8000"
         - "${WORKSPACE_ANGULAR_CLI_SERVE_HOST_PORT}:4200"
+        - "${WORKSPACE_VITE_PORT}:5173"
       tty: true
       environment:
         - PHP_IDE_CONFIG=${PHP_IDE_CONFIG}
@@ -216,6 +224,7 @@ services:
           - INSTALL_GMP=${PHP_FPM_INSTALL_GMP}
           - INSTALL_GNUPG=${PHP_FPM_INSTALL_GNUPG}
           - INSTALL_XDEBUG=${PHP_FPM_INSTALL_XDEBUG}
+          - XDEBUG_PORT=${PHP_FPM_XDEBUG_PORT}
           - INSTALL_PCOV=${PHP_FPM_INSTALL_PCOV}
           - INSTALL_PHPDBG=${PHP_FPM_INSTALL_PHPDBG}
           - INSTALL_BLACKFIRE=${INSTALL_BLACKFIRE}
@@ -240,6 +249,7 @@ services:
           - INSTALL_MYSQLI=${PHP_FPM_INSTALL_MYSQLI}
           - INSTALL_PGSQL=${PHP_FPM_INSTALL_PGSQL}
           - INSTALL_PG_CLIENT=${PHP_FPM_INSTALL_PG_CLIENT}
+          - PG_CLIENT_VERSION=${POSTGRES_CLIENT_VERSION}
           - INSTALL_POSTGIS=${PHP_FPM_INSTALL_POSTGIS}
           - INSTALL_INTL=${PHP_FPM_INSTALL_INTL}
           - INSTALL_GHOSTSCRIPT=${PHP_FPM_INSTALL_GHOSTSCRIPT}
@@ -268,21 +278,27 @@ services:
           - INSTALL_FFMPEG=${PHP_FPM_FFMPEG}
           - INSTALL_AUDIOWAVEFORM=${PHP_FPM_AUDIOWAVEFORM}
           - INSTALL_WKHTMLTOPDF=${PHP_FPM_INSTALL_WKHTMLTOPDF}
+          - WKHTMLTOPDF_VERSION=${PHP_FPM_WKHTMLTOPDF_VERSION}
           - INSTALL_XHPROF=${PHP_FPM_INSTALL_XHPROF}
           - INSTALL_XMLRPC=${PHP_FPM_INSTALL_XMLRPC}
           - INSTALL_PHPDECIMAL=${PHP_FPM_INSTALL_PHPDECIMAL}
           - INSTALL_ZOOKEEPER=${PHP_FPM_INSTALL_ZOOKEEPER}
           - INSTALL_SSDB=${PHP_FPM_INSTALL_SSDB}
           - INSTALL_TRADER=${PHP_FPM_INSTALL_TRADER}
+          - INSTALL_EVENT=${PHP_FPM_INSTALL_EVENT}
+          - LEGACY_OPENSSL=${PHP_LEGACY_OPENSSL}
           - DOWNGRADE_OPENSSL_TLS_AND_SECLEVEL=${PHP_DOWNGRADE_OPENSSL_TLS_AND_SECLEVEL}
+          - DOWNGRADE_OPENSSL_TLS_VERSION=${PHP_DOWNGRADE_OPENSSL_TLS_VERSION}
           - PUID=${PHP_FPM_PUID}
           - PGID=${PHP_FPM_PGID}
           - IMAGEMAGICK_VERSION=${PHP_FPM_IMAGEMAGICK_VERSION}
           - LOCALE=${PHP_FPM_DEFAULT_LOCALE}
-          - PHP_FPM_NEW_RELIC=${PHP_FPM_NEW_RELIC}
-          - PHP_FPM_NEW_RELIC_KEY=${PHP_FPM_NEW_RELIC_KEY}
-          - PHP_FPM_NEW_RELIC_APP_NAME=${PHP_FPM_NEW_RELIC_APP_NAME}
+          - NEW_RELIC=${PHP_FPM_NEW_RELIC}
+          - NEW_RELIC_KEY=${PHP_FPM_NEW_RELIC_KEY}
+          - NEW_RELIC_APP_NAME=${PHP_FPM_NEW_RELIC_APP_NAME}
           - INSTALL_DOCKER_CLIENT=${PHP_FPM_INSTALL_DOCKER_CLIENT}
+          - INSTALL_DNSUTILS=${PHP_FPM_INSTALL_DNSUTILS}
+          - INSTALL_POPPLER_UTILS=${PHP_FPM_INSTALL_POPPLER_UTILS}
           - http_proxy
           - https_proxy
           - no_proxy
@@ -290,8 +306,6 @@ services:
         - ./php-fpm/php${PHP_VERSION}.ini:/usr/local/etc/php/php.ini
         - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}${APP_CODE_CONTAINER_FLAG}
         - docker-in-docker:/certs/client
-      ports:
-        - "${PHP_FPM_XDEBUG_PORT}:9003"
       expose:
         - "9000"
       extra_hosts:
@@ -331,6 +345,7 @@ services:
           - INSTALL_OCI8=${PHP_WORKER_INSTALL_OCI8}
           - INSTALL_MSSQL=${PHP_WORKER_INSTALL_MSSQL}
           - INSTALL_PHALCON=${PHP_WORKER_INSTALL_PHALCON}
+          - INSTALL_APCU=${PHP_WORKER_INSTALL_APCU}
           - INSTALL_XLSWRITER=${PHP_WORKER_INSTALL_XLSWRITER}
           - INSTALL_SOAP=${PHP_WORKER_INSTALL_SOAP}
           - INSTALL_ZIP_ARCHIVE=${PHP_WORKER_INSTALL_ZIP_ARCHIVE}
@@ -347,6 +362,9 @@ services:
           - INSTALL_IMAP=${PHP_WORKER_INSTALL_IMAP}
           - INSTALL_XMLRPC=${PHP_WORKER_INSTALL_XMLRPC}
           - INSTALL_SSDB=${PHP_WORKER_INSTALL_SSDB}
+          - INSTALL_EVENT=${PHP_WORKER_INSTALL_EVENT}
+          - INSTALL_INTL=${PHP_WORKER_INSTALL_INTL}
+          - INSTALL_POPPLER_UTILS=${PHP_WORKER_INSTALL_POPPLER_UTILS}
           - PUID=${PHP_WORKER_PUID}
           - PGID=${PHP_WORKER_PGID}
           - IMAGEMAGICK_VERSION=${PHP_WORKER_IMAGEMAGICK_VERSION}
@@ -383,6 +401,7 @@ services:
           - INSTALL_MONGO=${LARAVEL_HORIZON_INSTALL_MONGO}
           - INSTALL_FFMPEG=${LARAVEL_HORIZON_INSTALL_FFMPEG}
           - INSTALL_AUDIOWAVEFORM=${LARAVEL_HORIZON_INSTALL_AUDIOWAVEFORM}
+          - INSTALL_POPPLER_UTILS=${LARAVEL_HORIZON_INSTALL_POPPLER_UTILS}
           - PUID=${LARAVEL_HORIZON_PUID}
           - PGID=${LARAVEL_HORIZON_PGID}
           - IMAGEMAGICK_VERSION=${LARAVEL_HORIZON_IMAGEMAGICK_VERSION}
@@ -394,6 +413,19 @@ services:
       extra_hosts:
         - "dockerhost:${DOCKER_HOST_IP}"
       networks:
+        - backend
+
+  ### Soketi Server ##############################################
+    soketi:
+      build:
+        context: ./soketi
+      volumes:
+        - ./soketi/config.json:/app/bin/config.json:ro
+      ports:
+        - "${SOKETI_PORT}:6001"
+        - "${SOKETI_METRICS_SERVER_PORT}:9601"
+      networks:
+        - frontend
         - backend
 
 ### NGINX Server #########################################
@@ -421,6 +453,8 @@ services:
       networks:
         - frontend
         - backend
+      extra_hosts:
+        - "host.docker.internal:host-gateway"  
 
 ### OpenResty Server #########################################
     openresty:
@@ -469,6 +503,7 @@ services:
           - PHP_UPSTREAM_TIMEOUT=${APACHE_PHP_UPSTREAM_TIMEOUT}
           - DOCUMENT_ROOT=${APACHE_DOCUMENT_ROOT}
           - APACHE_INSTALL_HTTP2=${APACHE_INSTALL_HTTP2}
+          - APACHE_FOR_MAC_M1=${APACHE_FOR_MAC_M1}
       volumes:
         - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}${APP_CODE_CONTAINER_FLAG}
         - ${APACHE_HOST_LOG_PATH}:/var/log/apache2
@@ -607,6 +642,10 @@ services:
         - GITLAB_POSTGRES_USER=${GITLAB_POSTGRES_USER}
         - GITLAB_POSTGRES_PASSWORD=${GITLAB_POSTGRES_PASSWORD}
         - GITLAB_POSTGRES_DB=${GITLAB_POSTGRES_DB}
+        - KEYCLOAK_POSTGRES_INIT=${KEYCLOAK_POSTGRES_INIT}
+        - KEYCLOAK_POSTGRES_USER=${KEYCLOAK_POSTGRES_USER}
+        - KEYCLOAK_POSTGRES_PASSWORD=${KEYCLOAK_POSTGRES_PASSWORD}
+        - KEYCLOAK_POSTGRES_DB=${KEYCLOAK_POSTGRES_DB}
         - JUPYTERHUB_POSTGRES_INIT=${JUPYTERHUB_POSTGRES_INIT}
         - JUPYTERHUB_POSTGRES_USER=${JUPYTERHUB_POSTGRES_USER}
         - JUPYTERHUB_POSTGRES_PASSWORD=${JUPYTERHUB_POSTGRES_PASSWORD}
@@ -621,6 +660,22 @@ services:
         - POSTGRES_CONFLUENCE_PASSWORD=${CONFLUENCE_POSTGRES_PASSWORD}
       networks:
         - backend
+### pgbackups PostgreSQL ###########################################
+    pgbackups:
+      image: prodrigestivill/postgres-backup-local
+      restart: always
+      volumes:
+        - ../backup:/backups
+      links:
+        - postgres
+      environment:
+        - POSTGRES_HOST={POSTGRES_HOST}
+        - POSTGRES_DB=${POSTGRES_DB}
+        - POSTGRES_USER=${POSTGRES_USER}
+        - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      networks:
+        - backend
+
 
 ### PostgreSQL PostGis ###################################
     postgres-postgis:
@@ -972,8 +1027,8 @@ services:
           - ADMINER_DEFAULT_SERVER=${ADM_DEFAULT_SERVER}
       ports:
         - "${ADM_PORT}:8080"
-      depends_on:
-        - php-fpm
+      # depends_on:
+      #   - php-fpm
       networks:
         - frontend
         - backend
@@ -1001,6 +1056,8 @@ services:
         - ${DATA_PATH_HOST}/meilisearch:/data.ms
       ports:
         - "${MEILISEARCH_HOST_PORT}:7700"
+      environment:
+        - MEILI_MASTER_KEY=${MEILISEARCH_KEY}
       networks:
         - frontend
         - backend
@@ -1017,6 +1074,9 @@ services:
         - cluster.name=laradock-cluster
         - node.name=laradock-node
         - bootstrap.memory_lock=true
+        - xpack.security.enabled=false
+        - xpack.security.transport.ssl.enabled=false
+        - indices.id_field_data.enabled=true
         - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
         - cluster.initial_master_nodes=laradock-node
       ulimits:
@@ -1121,6 +1181,16 @@ services:
       ports:
         - "${MAILDEV_HTTP_PORT}:80"
         - "${MAILDEV_SMTP_PORT}:25"
+      networks:
+        - frontend
+        - backend
+
+### Mailpit ##############################################
+    mailpit:
+      build: ./mailpit
+      ports:
+        - "${MAILPIT_HTTP_PORT}:8025"
+        - "${MAILPIT_SMTP_PORT}:1025"
       networks:
         - frontend
         - backend
@@ -1554,6 +1624,7 @@ services:
         - ADMIN_PASS=${REDIS_WEBUI_PASSWORD}
         - REDIS_1_HOST=${REDIS_WEBUI_CONNECT_HOST}
         - REDIS_1_PORT=${REDIS_WEBUI_CONNECT_PORT}
+        - REDIS_1_AUTH=${REDIS_PASSWORD}
       networks:
         - backend
       ports:
@@ -2057,4 +2128,39 @@ services:
       ports:
         - ${TARANTOOL_ADMIN_PORT}:80
       networks:
+        - backend
+
+  ### onedev ####################################################
+    onedev:
+      image: 1dev/server
+      ports:
+        - "${ONEDEV_HTTP_PORT}:6610"
+        - "${ONEDEV_SSH_PORT}:6611"
+      volumes:
+        - ${DATA_PATH_HOST}/onedev:/opt/onedev
+        - /var/run/docker.sock:/var/run/docker.sock
+      networks:
+        - frontend
+        - backend
+      restart: always
+  
+  ### keycloak ##################################################
+    keycloak:
+      image: bitnami/keycloak:${KEYCLOAK_VERSION}
+      ports:
+        - "${KEYCLOAK_HTTP_PORT}:${KEYCLOAK_HTTP_PORT}"
+      environment:
+        - KEYCLOAK_HTTP_PORT=${KEYCLOAK_HTTP_PORT}
+        - KEYCLOAK_CREATE_ADMIN_USER=${KEYCLOAK_CREATE_ADMIN_USER}
+        - KEYCLOAK_ADMIN_USER=${KEYCLOAK_ADMIN_USER}
+        - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+        - KEYCLOAK_DATABASE_HOST=${KEYCLOAK_POSTGRES_HOST}
+        - KEYCLOAK_DATABASE_PORT=${POSTGRES_PORT}
+        - KEYCLOAK_DATABASE_NAME=${KEYCLOAK_POSTGRES_DB}
+        - KEYCLOAK_DATABASE_USER=${KEYCLOAK_POSTGRES_USER}
+        - KEYCLOAK_DATABASE_PASSWORD=${KEYCLOAK_POSTGRES_PASSWORD}
+      depends_on:
+        - postgres
+      networks:
+        - frontend
         - backend
