@@ -295,8 +295,10 @@ services:
       depends_on:
         - php-fpm
       networks:
-        - frontend
-        - backend
+        frontend:
+        backend:
+          aliases:
+            - framework-template.local
 
 ### MySQL ################################################
     mysql:
@@ -348,6 +350,7 @@ services:
         - ${DATA_PATH_HOST}/redis:/data
       ports:
         - "${REDIS_PORT}:6379"
+      command: --requirepass ${REDIS_PASSWORD}
       networks:
         - backend
 
