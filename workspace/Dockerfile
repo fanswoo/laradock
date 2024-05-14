@@ -836,6 +836,7 @@ RUN if [ ${NPM_REGISTRY} ]; then \
 # Mount .npmrc into home folder
 COPY ./.npmrc /root/.npmrc
 COPY ./.npmrc /home/laradock/.npmrc
+RUN chown -R laradock:laradock /home/laradock/.npmrc
 
 
 ###########################################################################
@@ -1418,6 +1419,7 @@ RUN set -eux; \
   # MySQL Client:
   ###########################################################################
   if [ ${INSTALL_MYSQL_CLIENT} = true ]; then \
+    apt-get update -yqq && \
     apt-get -yqq install mysql-client; \
   fi; \
   ###########################################################################
