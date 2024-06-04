@@ -1,4 +1,4 @@
-if ($http_user_agent ~* (ApacheBench|pingback|YisouSpider|MJ12bot|AhrefsBot|360JK|Jorgee) ) {return 101;}
+if ($http_user_agent ~* (pingback|YisouSpider|MJ12bot|AhrefsBot|360JK|Jorgee|ClaudeBot|SemrushBot|FeedDemon|Indy Library|Alexa Toolbar|AskTbFXTV|CrawlDaddy|CoolpadWebkit|Java|Feedly|UniversalFeedParser|ApacheBench|Swiftbot|ZmEu|YandexBot|jaunty|Python-urllib|lightDeckReports Bot|YYSpider|DigExt|HttpClient|heritrix|Bytespider|Ezooms|JikeSpider) ) {return 101;}
 if ($http_user_agent = "" ) {return 101;}
 if ( $request = "POST /reg.html HTTP/1.1" ) {return 400;}
 if ( $request = "POST / HTTP/1.1" ) {return 400;}
