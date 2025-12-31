@@ -12,7 +12,6 @@ LABEL maintainer="Mahmoud Zalt <mahmoud@zalt.me>"
 ARG LARADOCK_PHP_VERSION
 
 # If you're in China, or you need to change sources, will be set CHANGE_SOURCE to true in .env.
-
 ARG CHANGE_SOURCE=false
 RUN if [ ${CHANGE_SOURCE} = true ]; then \
   # Change application source from dl-cdn.alpinelinux.org to aliyun source
@@ -100,15 +99,17 @@ RUN set -eux; if [ ${INSTALL_LDAP} = true ]; then \
 
 #Install GD package:
 ARG INSTALL_GD=false
-RUN if [ ${INSTALL_GD} = true ]; then \
-  apk add --update --no-cache freetype-dev libjpeg-turbo-dev jpeg-dev libpng-dev; \
-  if [ $(php -r "echo PHP_MAJOR_VERSION;") = "7" ] && [ $(php -r "echo PHP_MINOR_VERSION;") = "4" ]; then \
-  docker-php-ext-configure gd --with-freetype --with-jpeg; \
-  else \
-  docker-php-ext-configure gd --with-freetype-dir=/usr/lib/ --with-jpeg-dir=/usr/lib/ --with-png-dir=/usr/lib/; \
-  fi; \
-  docker-php-ext-install gd \
-  ;fi
+RUN if [ ${INSTALL_GD} = "true" ]; then \
+    apk add --no-cache \
+        freetype-dev \
+        libjpeg-turbo-dev \
+        libpng-dev \
+    && docker-php-ext-configure gd \
+        --with-freetype \
+        --with-jpeg \
+    && docker-php-ext-install -j$(nproc) gd \
+    && rm -rf /var/cache/apk/* \
+;fi
 
 #Install ImageMagick:
 ARG INSTALL_IMAGEMAGICK=false

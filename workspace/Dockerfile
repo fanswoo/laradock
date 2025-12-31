@@ -48,29 +48,31 @@ ARG PGID=1000
 ENV PGID ${PGID}
 
 # always run apt update when start and after add new source list, then clean up at end.
+# 替換掉原本的這一段
 RUN set -xe; \
     apt-get update -yqq && \
     pecl channel-update pecl.php.net && \
-    groupadd -g ${PGID} laradock && \
-    useradd -l -u ${PUID} -g laradock -m laradock -G docker_env && \
+    # --- 以下為修改後的安全邏輯 ---
+    # 檢查 GID 1000 是否已存在
+    if getent group ${PGID}; then \
+        # 如果存在，就將該群組改名為 laradock
+        groupmod -n laradock $(getent group ${PGID} | cut -d: -f1); \
+    else \
+        groupadd -g ${PGID} laradock; \
+    fi && \
+    # 檢查 UID 1000 是否已存在
+    if getent passwd ${PUID}; then \
+        # 如果存在，就將該使用者改名為 laradock，並確保家目錄正確
+        usermod -l laradock -g ${PGID} -m -d /home/laradock $(getent passwd ${PUID} | cut -d: -f1); \
+    else \
+        useradd -l -u ${PUID} -g laradock -m laradock -G docker_env; \
+    fi && \
+    # --- 以上為修改後的安全邏輯 ---
     usermod -p "*" laradock -s /bin/bash && \
     apt-get install -yqq \
       apt-utils \
-      #
-      #--------------------------------------------------------------------------
-      # Mandatory Software's Installation
-      #--------------------------------------------------------------------------
-      #
-      # Mandatory Software's such as ("php-cli", "git", "vim", ....) are
-      # installed on the base image 'laradock/workspace' image. If you want
-      # to add more Software's or remove existing one, you need to edit the
-      # base image (https://github.com/Laradock/workspace).
-      #
-      # next lines are here because there is no auto build on dockerhub see https://github.com/laradock/laradock/pull/1903#issuecomment-463142846
       libzip-dev zip unzip \
-      # Install the zip extension
       php${LARADOCK_PHP_VERSION}-zip \
-      # nasm
       nasm && \
       php -m | grep -q 'zip'
 
@@ -1348,7 +1350,7 @@ ARG INSTALL_DUSK_DEPS=false
 
 RUN if [ ${INSTALL_DUSK_DEPS} = true ]; then \
   apt-get -y install zip wget unzip xdg-utils \
-    libxpm4 libxrender1 libgtk2.0-0 libnss3 libgconf-2-4 xvfb \
+    libxpm4 libxrender1 libgtk2.0-0 libnss3 xvfb \
     gtk2-engines-pixbuf xfonts-cyrillic xfonts-100dpi xfonts-75dpi \
     xfonts-base xfonts-scalable x11-apps \
     fonts-ipafont \
@@ -1881,16 +1883,6 @@ RUN if [ ${INSTALL_JDK} = true ]; then \
     && apt-get install -y default-jdk ca-certificates-java \
     && update-ca-certificates -f \
 ;fi
-
-#
-#--------------------------------------------------------------------------
-# lerna
-#--------------------------------------------------------------------------
-#
-
-USER root
-
-RUN npm install -g lerna
 
 #
 #--------------------------------------------------------------------------
