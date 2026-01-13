@@ -1,0 +1,9 @@
+[program:laravel-reverb]
+process_name=%(program_name)s
+command=php /var/www/ligo/artisan reverb:start --host=0.0.0.0 --port=6001
+autostart=true
+autorestart=true
+user=laradock
+redirect_stderr=true
+stdout_logfile=/var/www/ligo/storage/logs/reverb.log
+stopwaitsecs=3600
