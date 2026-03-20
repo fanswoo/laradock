@@ -1363,14 +1363,6 @@ RUN if [ ${INSTALL_DUSK_DEPS} = true ]; then \
   && unzip chromedriver_linux64.zip \
   && mv chromedriver /usr/local/bin/ \
   && rm chromedriver_linux64.zip \
-  && mkdir -p /tmp/noto && \
-  cd /tmp/noto && \
-  wget https://noto-website-2.storage.googleapis.com/pkgs/NotoSansCJKtc-hinted.zip && \
-  unzip NotoSansCJKtc-hinted.zip && \
-  mkdir -p /usr/share/fonts/noto && \
-  mv *.otf /usr/share/fonts/noto && \
-  chmod -R 755 /usr/share/fonts/noto && \
-  fc-cache -fv \
 ;fi
 
 ###########################################################################

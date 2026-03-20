@@ -427,3 +427,21 @@ services:
         - "dockerhost:${DOCKER_HOST_IP}"
       networks:
         - backend
+
+  ### gotenberg ############################################
+    gotenberg:
+      image: gotenberg/gotenberg:8
+      networks:
+        - backend
+      command:
+        - "gotenberg"
+        - "--chromium-max-queue-size=5"
+        - "--api-timeout=60s"
+      deploy:
+        resources:
+          limits:
+            cpus: '2.0'      # 最多用 2 核
+            memory: 2G       # 最多用 2GB RAM
+          reservations:
+            cpus: '0.5'
+            memory: 512M
