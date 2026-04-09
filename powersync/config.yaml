@@ -17,5 +17,9 @@ client_auth:
   jwks_uri: "http://nginx/api/message/powersync/.well-known/jwks.json"
   # 說明：PowerSync 與 nginx 在同一個 Docker network，使用 service name
 
+# Sync Streams（指定同步規則檔案路徑）
+sync_rules:
+  path: /config/sync-streams.yaml
+
 # Port
 port: 8080
