@@ -298,6 +298,7 @@ services:
         - "${VARNISH_BACKEND_PORT}:81"
       depends_on:
         - php-fpm
+        - php-worker
       networks:
         frontend:
         backend:
@@ -433,15 +434,17 @@ services:
       image: gotenberg/gotenberg:8
       networks:
         - backend
+      restart: unless-stopped
       command:
         - "gotenberg"
-        - "--chromium-max-queue-size=5"
+        - "--chromium-max-queue-size=10"
         - "--api-timeout=60s"
+        - "--chromium-restart-after=10"
       deploy:
         resources:
           limits:
-            cpus: '2.0'      # 最多用 2 核
-            memory: 2G       # 最多用 2GB RAM
+            cpus: '1.0'
+            memory: 2G
           reservations:
             cpus: '0.5'
             memory: 512M

@@ -1,0 +1,49 @@
+# Sync Streams 定義
+# 每個 stream 定義同步給客戶端的資料子集
+
+streams:
+  # 使用者的對話列表 — 自動訂閱（連線時自動開始同步）
+  my_conversations:
+    auto_subscribe: true
+    query: |
+      SELECT c.*
+      FROM chat_conversations c
+      INNER JOIN chat_conversation_participants cp
+        ON c.id = cp.conversation_id
+      WHERE cp.participant_type = 'App\\User\\User'
+        AND cp.participant_id = token_parameters.user_id
+        AND c.deleted_at IS NULL
+
+  # 使用者的參與者記錄 — 自動訂閱
+  my_participants:
+    auto_subscribe: true
+    query: |
+      SELECT cp.*
+      FROM chat_conversation_participants cp
+      INNER JOIN chat_conversation_participants my_cp
+        ON cp.conversation_id = my_cp.conversation_id
+      WHERE my_cp.participant_type = 'App\\User\\User'
+        AND my_cp.participant_id = token_parameters.user_id
+
+  # 對話的訊息 — 按需訂閱（前端選擇對話時 subscribe）
+  conversation_messages:
+    parameters:
+      - name: conversation_id
+        type: string
+    query: |
+      SELECT m.*
+      FROM chat_messages m
+      WHERE m.conversation_id = :conversation_id
+        AND m.deleted_at IS NULL
+      ORDER BY m.created_at DESC
+
+  # 訊息的 reactions — 按需訂閱（跟隨 conversation_messages）
+  message_reactions:
+    parameters:
+      - name: conversation_id
+        type: string
+    query: |
+      SELECT mr.*
+      FROM chat_message_reactions mr
+      INNER JOIN chat_messages m ON mr.message_id = m.id
+      WHERE m.conversation_id = :conversation_id
