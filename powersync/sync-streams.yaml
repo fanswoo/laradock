@@ -1,8 +1,26 @@
 # Sync Streams 定義
 # 每個 stream 定義同步給客戶端的資料子集
+#
+# ⚠️ JWT token_parameters 契約（由計劃 05 的 PowerSyncAuthController::token() 產生）：
+#   - user_id:   integer  — 當前使用者的 users.id
+#   - user_type: string   — 'App\\User\\User'（預留給未來支援其他 participant 型別）
+#
+# ⚠️ Client parameters 契約（由前端 useConversations 透過 db.connect({ params }) 傳入）：
+#   - conv_since_cursor: string (ISO8601 timestamp)
+#       只同步 updated_at >= conv_since_cursor 的對話。由前端捲動進度動態調整。
+#       初次連線時由 `/api/message/conversations/cursor?count=30` 決定初始值；
+#       若使用者對話數少於 30，後端會回傳 `null`，前端降級為 '1970-01-01T00:00:00Z'（同步全部）。
+#
+# 若計劃 05 未加入 user_type claim 或 client_parameters 未傳入 conv_since_cursor，
+# PowerSync 啟動時會因參數未定義而失敗（客戶端必須保證 params 一定有值）。
 
 streams:
   # 使用者的對話列表 — 自動訂閱（連線時自動開始同步）
+  #
+  # 同步範圍由 client_parameters.conv_since_cursor 決定（scroll-driven）。
+  # 使用者向下捲動對話列表時，前端呼叫
+  # `/api/message/conversations/cursor?before=<current>&count=30` 取得更舊的 cursor
+  # 後更新 client parameter，PowerSync 會增量同步額外對話。
   my_conversations:
     auto_subscribe: true
     query: |
@@ -10,11 +28,12 @@ streams:
       FROM chat_conversations c
       INNER JOIN chat_conversation_participants cp
         ON c.id = cp.conversation_id
-      WHERE cp.participant_type = 'App\\User\\User'
+      WHERE cp.participant_type = token_parameters.user_type
         AND cp.participant_id = token_parameters.user_id
         AND c.deleted_at IS NULL
+        AND c.updated_at >= client_parameters.conv_since_cursor
 
-  # 使用者的參與者記錄 — 自動訂閱
+  # 使用者的參與者記錄 — 自動訂閱（範圍與 my_conversations 一致）
   my_participants:
     auto_subscribe: true
     query: |
@@ -22,28 +41,52 @@ streams:
       FROM chat_conversation_participants cp
       INNER JOIN chat_conversation_participants my_cp
         ON cp.conversation_id = my_cp.conversation_id
-      WHERE my_cp.participant_type = 'App\\User\\User'
+      INNER JOIN chat_conversations c
+        ON cp.conversation_id = c.id
+      WHERE my_cp.participant_type = token_parameters.user_type
         AND my_cp.participant_id = token_parameters.user_id
+        AND c.deleted_at IS NULL
+        AND c.updated_at >= client_parameters.conv_since_cursor
 
   # 對話的訊息 — 按需訂閱（前端選擇對話時 subscribe）
+  #
+  # 同步範圍由訂閱參數 since_cursor 決定（scroll-driven）：
+  #   - 初次進入對話：前端呼叫 `/api/message/conversations/{id}/messages/cursor?count=50`
+  #     取得第 50 則最新訊息的 `created_at`，作為初始 since_cursor
+  #   - 往上捲動載入更舊訊息：前端呼叫 cursor 端點取更舊 cursor，
+  #     unsubscribe 後以新 since_cursor 重新 subscribe，PowerSync 增量同步額外訊息
+  #   - 對話極短（訊息數 < 50）：cursor API 回傳 null，前端降級為 '1970-01-01T00:00:00Z'
+  #
+  # 為什麼用 cursor-driven：
+  #   1. 符合使用者實際瀏覽需求：沒捲到的訊息不同步，節省頻寬與 IndexedDB 儲存
+  #   2. 所有訊息統一走本地 SQLite，減少前端分支
+  #   3. 對重度使用者（單月訊息過萬）同樣有界，不會拖垮首次載入
+  #   4. 離線體驗一致：「捲過的都在」，沒捲過的統一顯示需連線提示
   conversation_messages:
     parameters:
       - name: conversation_id
+        type: string
+      - name: since_cursor
         type: string
     query: |
       SELECT m.*
       FROM chat_messages m
       WHERE m.conversation_id = :conversation_id
         AND m.deleted_at IS NULL
-      ORDER BY m.created_at DESC
+        AND m.created_at >= :since_cursor
 
   # 訊息的 reactions — 按需訂閱（跟隨 conversation_messages）
+  # 與 conversation_messages 的 since_cursor 範圍對齊，只同步已同步範圍內訊息的 reactions
   message_reactions:
     parameters:
       - name: conversation_id
+        type: string
+      - name: since_cursor
         type: string
     query: |
       SELECT mr.*
       FROM chat_message_reactions mr
       INNER JOIN chat_messages m ON mr.message_id = m.id
       WHERE m.conversation_id = :conversation_id
+        AND m.deleted_at IS NULL
+        AND m.created_at >= :since_cursor
