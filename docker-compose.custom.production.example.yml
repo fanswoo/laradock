@@ -52,6 +52,7 @@ services:
         - ${APP_CODE_PATH_HOST}:${APP_CODE_PATH_CONTAINER}${APP_CODE_CONTAINER_FLAG}
         - /etc/localtime:/etc/localtime:ro
         - /dev/shm:/dev/shm
+        - ${SSH_PATH}:/home/laradock/.ssh
       expose:
         - "9000"
       extra_hosts:
@@ -184,3 +185,28 @@ services:
           reservations:
             cpus: '0.5'
             memory: 512M
+
+### PowerSync ################################################
+    powersync:
+      image: journeyapps/powersync-service:latest
+      ports:
+        - "8090:8080"
+      volumes:
+        - ./powersync:/config
+      environment:
+        - POWERSYNC_CONFIG_PATH=/config/config.yaml
+        - PS_MYSQL_URI=${PS_MYSQL_URI}
+      depends_on:
+        - powersync_mongo
+      networks:
+        - backend
+      restart: unless-stopped
+
+### PowerSync MongoDB ########################################
+    powersync_mongo:
+      image: mongo:7
+      volumes:
+        - powersync_mongo_data:/data/db
+      networks:
+        - backend
+      restart: unless-stopped
