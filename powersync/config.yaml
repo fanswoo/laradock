@@ -24,11 +24,11 @@ storage:
 
 # Client authentication
 client_auth:
-  jwks_uri: "https://ligo-message.local/api/message/powersync/.well-known/jwks.json"
-  # 走 HTTPS (port 443) 才會命中 ligo-message.conf 的 vhost；
-  # hostname ligo-message.local 由 docker-compose nginx aliases 解析到 nginx 容器
+  jwks_uri: "https://ligo.local/api/message/powersync/.well-known/jwks.json"
+  # 走 HTTPS (port 443) 才會命中 ligo.conf 的 vhost；
+  # hostname ligo.local 由 docker-compose nginx aliases 解析到 nginx 容器
   audience:
-    - "https://ligo-message.local"
+    - "https://ligo.local"
   # 必須與 PowerSyncAuthController::token() 簽發 JWT 時的 aud claim 一致
 
 # Sync Streams（指定同步規則檔案路徑）
