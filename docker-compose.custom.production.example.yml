@@ -11,6 +11,8 @@ volumes:
     driver: ${VOLUMES_DRIVER}
   phpmyadmin:
     driver: ${VOLUMES_DRIVER}
+  powersync_mongo_data:
+    driver: ${VOLUMES_DRIVER}
 
 services:
 
@@ -196,6 +198,7 @@ services:
       environment:
         - POWERSYNC_CONFIG_PATH=/config/config.yaml
         - PS_MYSQL_URI=${PS_MYSQL_URI}
+        # - NODE_TLS_REJECT_UNAUTHORIZED=0
       depends_on:
         - powersync_mongo
       networks:
@@ -203,8 +206,11 @@ services:
       restart: unless-stopped
 
 ### PowerSync MongoDB ########################################
+    # 首次啟動或清掉 powersync_mongo_data volume 後,需手動跑一次 RS initiate:
+    #   bash ./powersync/mongo-rs-init.sh
     powersync_mongo:
       image: mongo:7
+      command: ["--replSet", "rs0", "--bind_ip_all", "--quiet"]
       volumes:
         - powersync_mongo_data:/data/db
       networks:
