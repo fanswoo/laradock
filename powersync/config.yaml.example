@@ -1,0 +1,39 @@
+# PowerSync self-hosted configuration
+
+replication:
+  connections:
+    - type: mysql
+      uri: !env PS_MYSQL_URI
+      # 說明：
+      #   - config schema 要求 replication.connections 是 array，不可寫成 replication.type/uri
+      #     （錯誤寫法 log 會照常顯示 "Replication Engine Successfully started"，但註冊 0 個 replicator）
+      #   - 實際 URI 由 /var/laradock/.env 的 PS_MYSQL_URI 提供
+      #   - PowerSync 僅支援 !env 替換整個值（無字串插值），且變數名必須以 PS_ 開頭
+      #   - powersync_user 需先在 MySQL 建立（見 server-config.md 1-3）
+
+logging:
+  level: debug
+  format: json
+
+storage:
+  type: mongodb
+  uri: "mongodb://powersync_mongo:27017/powersync?replicaSet=rs0"
+  # replicaSet=rs0：PowerSync 的 multi-document transactions 要求 RS 模式（見 docker-compose）
+  # 不可加 directConnection=true：會讓 driver 當 standalone 處理連線，導致 mongo 以 RS member
+  # 身份拒絕 direct write，出現 NotWritablePrimary 錯誤
+
+# Client authentication
+client_auth:
+  jwks_uri: "https://ligo.local/api/message/powersync/.well-known/jwks.json"
+  # 走 HTTPS (port 443) 才會命中 ligo.conf 的 vhost；
+  # hostname ligo.local 由 docker-compose nginx aliases 解析到 nginx 容器
+  audience:
+    - "https://ligo.local"
+  # 必須與 PowerSyncAuthController::token() 簽發 JWT 時的 aud claim 一致
+
+# Sync Streams（指定同步規則檔案路徑）
+sync_rules:
+  path: /config/sync-streams.yaml
+
+# Port
+port: 8080
