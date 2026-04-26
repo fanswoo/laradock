@@ -11,6 +11,8 @@ volumes:
     driver: ${VOLUMES_DRIVER}
   phpmyadmin:
     driver: ${VOLUMES_DRIVER}
+  powersync_mongo_data:
+    driver: ${VOLUMES_DRIVER}
 
 services:
 
@@ -122,7 +124,7 @@ services:
       networks:
         - frontend
         - backend
-        
+
 ### Redis ################################################
     redis:
       image: ghcr.io/fanswoo/redis:latest
