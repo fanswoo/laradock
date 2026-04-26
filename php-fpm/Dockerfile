@@ -1359,6 +1359,18 @@ RUN if [ ${INSTALL_DNSUTILS} = true ]; then \
     apt-get update && apt-get install -y dnsutils \
 ;fi
 
+
+###########################################################################
+# Inkscape:
+###########################################################################
+
+ARG INSTALL_INKSCAPE=false
+
+RUN if [ ${INSTALL_INKSCAPE} = true ]; then \
+    apt-get update \
+    && apt-get install -y inkscape \
+;fi
+
 ###########################################################################
 # Check PHP version:
 ###########################################################################
