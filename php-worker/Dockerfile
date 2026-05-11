@@ -643,6 +643,19 @@ ENTRYPOINT ["/usr/bin/supervisord", "-n", "-c",  "/etc/supervisord.conf"]
 #
 # -- Your awesome modifications go here -- #
 
+###########################################################################
+# Node.js (for Inertia / front-end builds):
+###########################################################################
+
+ARG INSTALL_NODE=false
+ARG NODE_VERSION=20
+
+RUN if [ ${INSTALL_NODE} = true ]; then \
+    apk add --update --no-cache nodejs npm \
+    && node -v \
+    && npm -v \
+;fi
+
 #
 #--------------------------------------------------------------------------
 # Check PHP version
