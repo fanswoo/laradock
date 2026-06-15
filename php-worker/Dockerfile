@@ -104,9 +104,11 @@ RUN if [ ${INSTALL_GD} = "true" ]; then \
         freetype-dev \
         libjpeg-turbo-dev \
         libpng-dev \
+        libwebp-dev \
     && docker-php-ext-configure gd \
         --with-freetype \
         --with-jpeg \
+        --with-webp \
     && docker-php-ext-install -j$(nproc) gd \
     && rm -rf /var/cache/apk/* \
 ;fi
