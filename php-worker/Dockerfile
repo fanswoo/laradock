@@ -104,9 +104,11 @@ RUN if [ ${INSTALL_GD} = "true" ]; then \
         freetype-dev \
         libjpeg-turbo-dev \
         libpng-dev \
+        libwebp-dev \
     && docker-php-ext-configure gd \
         --with-freetype \
         --with-jpeg \
+        --with-webp \
     && docker-php-ext-install -j$(nproc) gd \
     && rm -rf /var/cache/apk/* \
 ;fi
@@ -642,6 +644,19 @@ ENTRYPOINT ["/usr/bin/supervisord", "-n", "-c",  "/etc/supervisord.conf"]
 # If you need to modify this image, feel free to do it right here.
 #
 # -- Your awesome modifications go here -- #
+
+###########################################################################
+# Node.js (for Inertia / front-end builds):
+###########################################################################
+
+ARG INSTALL_NODE=false
+ARG NODE_VERSION=20
+
+RUN if [ ${INSTALL_NODE} = true ]; then \
+    apk add --update --no-cache nodejs npm \
+    && node -v \
+    && npm -v \
+;fi
 
 #
 #--------------------------------------------------------------------------
