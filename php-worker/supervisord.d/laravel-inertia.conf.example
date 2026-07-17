@@ -1,0 +1,16 @@
+[program:ligo-inertia-ssr]
+command=php /var/www/ligo/artisan inertia:start-ssr
+directory=/var/www/ligo
+user=laradock
+autostart=true
+autorestart=true
+startsecs=10
+stopwaitsecs=10
+stopsignal=TERM
+stopasgroup=true
+killasgroup=true
+redirect_stderr=true
+stdout_logfile=/var/www/ligo/storage/logs/inertia-ssr.log
+stdout_logfile_maxbytes=10MB
+stdout_logfile_backups=5
+environment=NODE_OPTIONS="--max-old-space-size=1024"
