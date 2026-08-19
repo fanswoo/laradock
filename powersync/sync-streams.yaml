@@ -17,6 +17,12 @@
 # 授權備忘：所有 join 都同時比對 participant_id 與 participant_type（JWT 中 user_type）。
 # 缺少 participant_type 檢查會讓其他 morph 類型（例：Admin、Employee）使用相同數字 id
 # 假冒 User 身分取得不屬於他們的對話/訊息。
+#
+# 重新部署備忘（2026-08-14）：本機 MySQL 由多個專案共用，binlog 是整台 server 的。
+# 其他 schema 的 RENAME TABLE 會踩到 module-mysql BinLogListener.js:383 未做 null 檢查的
+# this.databaseFilter[schema](...)，導致 replicator 無限 crash-restart、checkpoint 永遠不前進。
+# 解法是修改本檔（任何內容變更皆可）觸發新版 sync rules，從當前 binlog 位置重做 snapshot。
+# 注意：restart 容器沒有用，PowerSync 比對的是本檔內容而非 mtime。
 
 streams:
   # 使用者的對話列表 — 自動訂閱
