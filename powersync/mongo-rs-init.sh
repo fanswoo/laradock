@@ -23,13 +23,31 @@ cd "$(dirname "$0")/.."
 SERVICE="${SERVICE:-powersync_mongo}"
 RS_NAME="${RS_NAME:-rs0}"
 
+# compose v2 可能裝成 docker plugin (docker compose) 或獨立執行檔 (docker-compose)
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+elif docker-compose version >/dev/null 2>&1; then
+  COMPOSE=(docker-compose)
+else
+  echo "[mongo-rs-init] 找不到 docker compose / docker-compose" >&2
+  exit 1
+fi
+
 echo "[mongo-rs-init] Waiting for ${SERVICE} mongo to accept connections..."
-until docker compose exec -T "${SERVICE}" mongosh --quiet --eval 'db.adminCommand("ping").ok' >/dev/null 2>&1; do
+for i in $(seq 1 60); do
+  if "${COMPOSE[@]}" exec -T "${SERVICE}" mongosh --quiet --eval 'db.adminCommand("ping").ok' >/dev/null 2>&1; then
+    break
+  fi
+  if [ "$i" -eq 60 ]; then
+    echo "[mongo-rs-init] 等了 60 秒還連不上，最後一次錯誤:" >&2
+    "${COMPOSE[@]}" exec -T "${SERVICE}" mongosh --quiet --eval 'db.adminCommand("ping").ok' >&2 || true
+    exit 1
+  fi
   sleep 1
 done
 echo "[mongo-rs-init] Mongo is up."
 
-docker compose exec -T "${SERVICE}" mongosh --quiet --eval "
+"${COMPOSE[@]}" exec -T "${SERVICE}" mongosh --quiet --eval "
   try {
     const s = rs.status();
     print('[mongo-rs-init] Replica set already initialized: ' + s.set + ' (myState=' + s.myState + ')');
