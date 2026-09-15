@@ -24,6 +24,60 @@
 # 解法是修改本檔（任何內容變更皆可）觸發新版 sync rules，從當前 binlog 位置重做 snapshot。
 # 注意：restart 容器沒有用，PowerSync 比對的是本檔內容而非 mtime。
 
+# 再犯備忘（2026-09-09）：同一個坑又踩了一次，這次找到了真正的來源。
+# 撞死 replicator 的是 `use `testing_test_18`; rename table `workflow_credentials`
+# to `credentials``，來自 database/migrations/2026_08_30_120000_rename_workflow_
+# credentials_to_credentials.php。平行測試的 18 個 testing_test_* 資料庫每次
+# migrate:fresh 都會跑這一句，所以一輪測試就丟好幾十顆地雷進 binlog。
+# PowerSync 起來 6 分鐘內壞掉重開 16 次，checkpoint 停在 binlog.000051，
+# 而 MySQL 已經在 binlog.000053，差了約 46000 筆交易，新訊息永遠同步不到。
+# 根治的做法已經放進 docker/sail/mysql/local-speed.cnf 的 binlog_do_db，
+# 只有 cowork-style-local 會進 binlog，測試資料庫再也碰不到這裡。
+# 本檔這次的內容變更是為了觸發新版 sync rules，從乾淨的位置重做 snapshot。
+
+# 換來源備忘（2026-09-14）：replication 來源從 MySQL 換成 PostgreSQL，bucket 儲存
+# 從 MongoDB 換成 PostgreSQL（同一台 pgsql server 上的 powersync_storage database）。
+# powersync_mongo 容器、它的 volume 與 mongo-rs-init.sh 都已刪除。
+# 換來源本來就會讓所有 bucket 作廢、每個客戶端從零重新同步，本檔這次的內容變更
+# 是為了讓那次重做從乾淨的位置開始。
+#
+# 上面兩則備忘寫的那個坑，在 PostgreSQL 上不會再發生，而且是結構上不會：
+# MySQL 的 binlog 是整台 server 一份，所以別的專案的 schema 做 RENAME TABLE 會撞死
+# 這裡的 replicator；PostgreSQL 的 replication slot 只屬於一個 database，
+# 平行測試用的 testing_test_1 .. testing_test_18 是各自獨立的 database，
+# 它們做什麼都碰不到這個 slot。docker/sail/mysql/local-speed.cnf 的 binlog_do_db
+# 是當時的補救，現在連補救都不需要了。
+#
+# 客戶端不需要改。來源欄位是 uuid，到 bucket 裡是字串，Flutter 的
+# lib/services/powersync/ai_powersync_schema.dart 與網頁版 schema.ts 早就把指到
+# 「人」的四個欄位宣告成 text，兩種形狀都裝得下（後端 docs/adr/0093）。
+
+# 時間變 UTC 備忘（2026-09-14）：PostgreSQL 的 173 個時間欄位（67 張表）全部從
+# naive timestamp 換成 timestamptz，存的是真 UTC，舊值以台北時間讀入
+# （後端 docs/adr/0092、artisan db:times-to-utc）。人看到的時刻沒有移動，變的是形狀。
+#
+# **這次沒有改任何設定，是欄位型別讓 wire 換了形狀。**
+# 票上寫「把 ISO 8601 設定打開」，但那個設定叫 timestamps_iso8601，它的 fixedIn 是
+# CompatibilityEdition.SYNC_STREAMS（=2），而本檔最下面是 edition: 3，所以它本來就
+# 是開的。從 image 的 /app/packages/sync-rules/dist/compatibility.js 讀出來的。
+# 而且它管的只是 T 分隔符，不是 Z —— 換之前 wire 上就已經是
+# "2026-09-15T00:28:44.000000" 了。Z 來自 timestamptz，不來自這個設定。
+#
+# 所以 wire 從 "2026-09-11T20:37:00"（沒有標記的台北時間）
+# 變成 "2026-09-11T12:37:00Z"（帶標記的真 UTC），同一個瞬間。
+#
+# 兩個 client 都不用改。PWA 的 parser（resources/js/workspace/conversation/utils/
+# format.ts）本來就兩種形狀都讀，Flutter 的 parseDateTimeOrNull 也是
+# （cowork_style_app commit 12b3f96）。沒有標記的那一支要留著：本機還沒重新同步的
+# 舊資料仍然是舊形狀。
+#
+# **唯一真正的危險是未讀數。** PWA 是把 chat_messages.created_at 和
+# chat_conversation_participants.last_read_at 當**純文字**比大小的。兩欄走同一條線，
+# 所以只要每一列的形狀一致就沒事。**每一個時間欄位的每一列都要在同一次轉換完成，
+# 否則跨越那次轉換的對話，未讀數全錯。** 這是轉移那張票要證明的，不是假設的。
+#
+# 本檔這次的內容變更是為了觸發新版 sync rules，讓 snapshot 從新形狀重做。
+
 streams:
   # 使用者的對話列表 — 自動訂閱
   my_conversations:
