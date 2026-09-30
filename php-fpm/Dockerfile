@@ -845,21 +845,6 @@ RUN if [ ${INSTALL_IMAGEMAGICK} = true ]; then \
 ;fi
 
 ###########################################################################
-# rsvg-convert:
-###########################################################################
-
-# cowork-style draws each SVG reference picture of a media make into a PNG
-# with rsvg-convert before the model receives it (docs/adr/0115 in
-# fanswoo/cowork-style). It is installed unconditionally, because an image
-# without it refuses every make that carries an SVG.
-
-USER root
-
-RUN apt-get update -yqq && \
-    apt-get install -yqq --no-install-recommends librsvg2-bin && \
-    rsvg-convert --version
-
-###########################################################################
 # SMB:
 ###########################################################################
 
