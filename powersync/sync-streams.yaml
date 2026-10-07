@@ -89,10 +89,10 @@
 # 原本四條 stream 一字不改；上線的搬移步驟跑完之後，AI 對話的列就不在它們讀的表裡。
 # 本檔這次的內容變更會讓 PowerSync 換一版 sync rules、重做 snapshot。
 # 下面兩條 AI stream 與後端 docker/sail/powersync/sync-streams.yaml 的同名 stream
-# 逐字相同。後端那一份另有頁面同步計畫的改動（頁面同步備忘、四條聊天 stream 的
-# share_roots 條件與五條頁面 stream），這一份還沒有。聊天的 token 不帶
-# share_roots，所以兩條 AI stream 的這個條件對兩個 client 一律成立；帶 share_roots
-# 的頁面同步 token 讀不到它們。改其中一邊時，另一邊在同一次上線跟著改。
+# 逐字相同。後端那一份另有頁面同步計畫的改動（第 3 行的版本、頁面同步備忘、頁面內文
+# 備忘、四條聊天 stream 的 share_roots 條件與五條頁面 stream），這一份還沒有。聊天的
+# token 不帶 share_roots，所以兩條 AI stream 的這個條件對兩個 client 一律成立；帶
+# share_roots 的頁面同步 token 讀不到它們。改其中一邊時，另一邊在同一次上線跟著改。
 
 streams:
   # 使用者的對話列表 — 自動訂閱
