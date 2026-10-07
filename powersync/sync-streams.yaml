@@ -78,6 +78,22 @@
 #
 # 本檔這次的內容變更是為了觸發新版 sync rules，讓 snapshot 從新形狀重做。
 
+# AI 對話分表備忘（2026-10-06）：AI 對話與它的訊息從 chat_* 表搬到自己的兩張表
+# ai_conversations 與 ai_messages（後端 docs/adr/0141-an-ai-conversation-has-its-own-two-tables-and-old-app-builds-break-for-a-short-time.md）。
+# 下面多了兩條 stream：my_ai_conversations（自動訂閱）與 ai_conversation_messages
+# （依 conversation_id 按需訂閱）。兩條 query 都比對
+# ai_conversations.creator_id = auth.parameter('user_id')，只有建立對話的人同步得到。
+# creator_id 只存 users 表的 key，旁邊沒有 morph 類型欄位，所以上面授權備忘的
+# participant_type 比對在這兩條沒有對應的欄位可比。
+# 兩條都不是頁面 stream，所以照頁面同步備忘的規則，要求 token 不帶 share_roots。
+# 原本四條 stream 一字不改；上線的搬移步驟跑完之後，AI 對話的列就不在它們讀的表裡。
+# 本檔這次的內容變更會讓 PowerSync 換一版 sync rules、重做 snapshot。
+# 下面兩條 AI stream 與後端 docker/sail/powersync/sync-streams.yaml 的同名 stream
+# 逐字相同。後端那一份另有頁面同步計畫的改動（頁面同步備忘、四條聊天 stream 的
+# share_roots 條件與五條頁面 stream），這一份還沒有。聊天的 token 不帶
+# share_roots，所以兩條 AI stream 的這個條件對兩個 client 一律成立；帶 share_roots
+# 的頁面同步 token 讀不到它們。改其中一邊時，另一邊在同一次上線跟著改。
+
 streams:
   # 使用者的對話列表 — 自動訂閱
   my_conversations:
@@ -136,6 +152,29 @@ streams:
         AND chat_conversation_participants.participant_type = auth.parameter('user_type')
         AND chat_messages.deleted_at IS NULL
         AND chat_conversations.deleted_at IS NULL
+
+  # 使用者自己的 AI 對話 — 自動訂閱
+  my_ai_conversations:
+    auto_subscribe: true
+    query: |
+      SELECT ai_conversations.*
+      FROM ai_conversations
+      WHERE ai_conversations.creator_id = auth.parameter('user_id')
+        AND ai_conversations.deleted_at IS NULL
+        AND auth.parameter('share_roots') IS NULL
+
+  # AI 對話的訊息 — 按需訂閱
+  ai_conversation_messages:
+    query: |
+      SELECT ai_messages.*
+      FROM ai_messages
+      INNER JOIN ai_conversations
+        ON ai_conversations.id = ai_messages.conversation_id
+      WHERE ai_messages.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.creator_id = auth.parameter('user_id')
+        AND ai_messages.deleted_at IS NULL
+        AND ai_conversations.deleted_at IS NULL
+        AND auth.parameter('share_roots') IS NULL
 
 config:
   edition: 3
