@@ -94,6 +94,18 @@
 # token 不帶 share_roots，所以兩條 AI stream 的這個條件對兩個 client 一律成立；帶
 # share_roots 的頁面同步 token 讀不到它們。改其中一邊時，另一邊在同一次上線跟著改。
 
+# 任務對話側欄備忘（2026-10-13）：任務對話的側欄有四張表：ai_task_goals（目標）、
+# ai_task_subtasks（子任務）、ai_task_outputs（產出）與 ai_task_context_items（背景資料）
+# （後端 docs/adr/0143-a-task-conversation-works-in-the-background-and-writes-when-a-piece-of-work-is-done.md）。
+# 下面多了四條 stream，一張表一條：task_panel_goals、task_panel_subtasks、
+# task_panel_outputs 與 task_panel_context_items，都依 conversation_id 按需訂閱。
+# 四條 query 都 join ai_conversations，比對 ai_conversations.creator_id = auth.parameter('user_id')，
+# 只有開始這段任務對話的人同步得到；對話被軟刪除之後，它的側欄也不再同步。
+# 四條都不是頁面 stream，所以照頁面同步備忘的規則，要求 token 不帶 share_roots。
+# 四張表沒有 deleted_at 欄位：一列被刪掉就是真的刪掉，PowerSync 會從 client 移除它。
+# 本檔這次的內容變更會讓 PowerSync 換一版 sync rules、重做 snapshot。
+# 下面四條側欄 stream 與後端 docker/sail/powersync/sync-streams.yaml 的同名 stream 逐字相同；改其中一邊時，另一邊在同一次上線跟著改。
+
 streams:
   # 使用者的對話列表 — 自動訂閱
   my_conversations:
@@ -173,6 +185,54 @@ streams:
       WHERE ai_messages.conversation_id = subscription.parameter('conversation_id')
         AND ai_conversations.creator_id = auth.parameter('user_id')
         AND ai_messages.deleted_at IS NULL
+        AND ai_conversations.deleted_at IS NULL
+        AND auth.parameter('share_roots') IS NULL
+
+  # 任務對話的目標 — 按需訂閱
+  task_panel_goals:
+    query: |
+      SELECT ai_task_goals.*
+      FROM ai_task_goals
+      INNER JOIN ai_conversations
+        ON ai_conversations.id = ai_task_goals.conversation_id
+      WHERE ai_task_goals.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.creator_id = auth.parameter('user_id')
+        AND ai_conversations.deleted_at IS NULL
+        AND auth.parameter('share_roots') IS NULL
+
+  # 任務對話的子任務 — 按需訂閱
+  task_panel_subtasks:
+    query: |
+      SELECT ai_task_subtasks.*
+      FROM ai_task_subtasks
+      INNER JOIN ai_conversations
+        ON ai_conversations.id = ai_task_subtasks.conversation_id
+      WHERE ai_task_subtasks.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.creator_id = auth.parameter('user_id')
+        AND ai_conversations.deleted_at IS NULL
+        AND auth.parameter('share_roots') IS NULL
+
+  # 任務對話的產出 — 按需訂閱
+  task_panel_outputs:
+    query: |
+      SELECT ai_task_outputs.*
+      FROM ai_task_outputs
+      INNER JOIN ai_conversations
+        ON ai_conversations.id = ai_task_outputs.conversation_id
+      WHERE ai_task_outputs.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.creator_id = auth.parameter('user_id')
+        AND ai_conversations.deleted_at IS NULL
+        AND auth.parameter('share_roots') IS NULL
+
+  # 任務對話的背景資料 — 按需訂閱
+  task_panel_context_items:
+    query: |
+      SELECT ai_task_context_items.*
+      FROM ai_task_context_items
+      INNER JOIN ai_conversations
+        ON ai_conversations.id = ai_task_context_items.conversation_id
+      WHERE ai_task_context_items.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.creator_id = auth.parameter('user_id')
         AND ai_conversations.deleted_at IS NULL
         AND auth.parameter('share_roots') IS NULL
 
