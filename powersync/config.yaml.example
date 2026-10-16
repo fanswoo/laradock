@@ -31,6 +31,19 @@ client_auth:
     - "https://cowork-style.local"
   # 必須與 PowerSyncAuthController::token() 簽發 JWT 時的 aud claim 一致
 
+# 每一條同步連線的兩個上限（powersync-service 1.26.1 的 api.parameters，沒有設定時都是 1000）：
+#   - max_parameter_query_results：這條連線所有參數查詢傳回的列數加總
+#   - max_buckets_per_connection：這條連線上不重複的 bucket 數
+# 超過任何一個，服務就以 [PSYNC_S2305] 結束整條連線，這條連線上的每一條 stream 都同步不到
+# （sync-streams.yaml 2026-10-16 的備忘）。每一段聊天對話經 my_conversations 與 my_participants
+# 佔兩個參數查詢結果與兩個 bucket，所以在預設上限下，大約有 500 段聊天對話的人就連不上。
+# 數值與後端 docker/sail/powersync/config.yaml 相同（後端 docs/powersync/live-service.md 的規則 9）。
+# 服務只在啟動時讀這個檔案。
+api:
+  parameters:
+    max_parameter_query_results: 5000
+    max_buckets_per_connection: 5000
+
 # Sync Streams（指定同步規則檔案路徑）
 sync_rules:
   path: /config/sync-streams.yaml
