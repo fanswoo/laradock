@@ -106,6 +106,67 @@
 # 本檔這次的內容變更會讓 PowerSync 換一版 sync rules、重做 snapshot。
 # 下面四條側欄 stream 與後端 docker/sail/powersync/sync-streams.yaml 的同名 stream 逐字相同；改其中一邊時，另一邊在同一次上線跟著改。
 
+# 參數查詢與 bucket 上限備忘（2026-10-16）：本檔是正式環境 sync rules 的範本。PowerSync 1.26.1
+# 對每一條同步連線有兩個上限，沒有設定時都是 1000：所有參數查詢傳回的列數加總
+# （max_parameter_query_results），與連線上不重複的 bucket 數（max_buckets_per_connection）。
+# 超過任何一個，服務就回 [PSYNC_S2305]（Too many parameter query results 或 Too many buckets），
+# 整條連線以 "stream error" 結束，這條連線上的每一條 stream 都同步不到：對話、AI 對話清單、
+# AI 對話的訊息與任務側欄都一樣，client 重新連線也在同一處失敗。
+# 按需訂閱的 stream 每一次訂閱都查一次它 join 的父表，而 powersync-js 在頁面離開對話之後
+# 仍保留訂閱，直到訂閱的 TTL 結束。ai_conversation_messages 與四條 task_panel_* 原本只以
+# ai_conversations.creator_id = auth.parameter('user_id') 查父表，所以每一次訂閱都傳回這個人
+# 的每一段 AI 對話：有 139 段 AI 對話的人，打開七段 AI 對話與一段任務對話的側欄就超過上限，
+# 每一段打開的任務對話再加四次。conversation_messages 與 message_reactions 查
+# chat_conversations 時沒有任何鍵，每一次訂閱都傳回所有人每一段未刪除的對話；查
+# chat_conversation_participants 時只以人為鍵，傳回這個人的每一筆參與記錄。message_reactions
+# 另外以對話查 chat_messages：訂閱的對話中每一則未刪除的訊息傳回一列，也各開一個 bucket，
+# 所以一段有 1200 則訊息的對話，一次訂閱就超過兩個上限。
+# 規則：按需訂閱的 stream join 父表時，父表的條件一定要有一個以 subscription 參數為鍵的
+# 等式（例如 ai_conversations.id = subscription.parameter('conversation_id')），不能只以
+# auth 參數為鍵，也不能沒有鍵；選出的表也要有以 subscription 參數比對的欄位，讓 bucket 以
+# 訂閱的對話劃分，不以父表或對話中的每一列劃分。這樣每一次訂閱只開一個 bucket，對每一張父表
+# 只查到一列，數量不隨這個人的對話數或對話的訊息數成長（後端 docs/powersync/live-service.md
+# 的規則 8）。
+# 本次的改動，每一條 query 的 SELECT 都沒有改：
+# - ai_conversation_messages 與四條 task_panel_* 比對 ai_conversations.id；
+# - conversation_messages 比對 chat_conversation_participants.conversation_id 與
+#   chat_conversations.id；
+# - message_reactions 的 FROM、INNER JOIN 與 WHERE 換成後端的寫法：以 reaction 自己的
+#   chat_message_reactions.conversation_id 比對訂閱的對話，不再 join chat_messages，並以同一個
+#   欄位 join、比對 chat_conversation_participants 與 chat_conversations；
+# - my_conversations、my_participants、conversation_messages 與 message_reactions 的外層 WHERE
+#   最後一個條件是 auth.parameter('share_roots') IS NULL（規則 7）。頁面同步的 token 帶著同樣的
+#   user_id 與 user_type，而發它的路由 GET /api/document/powersync/token 只檢查 documents 這個
+#   Access Scope，自 2026-10-10 的正式部署起已經上線；少了這個條件，只取得 documents 的 token
+#   就能讀到這個人所有的對話、參與者、訊息與 reactions。對話的 token 不帶 share_roots，所以
+#   client 收到的列不變。上面 AI 對話分表備忘說本檔的四條聊天 stream 還沒有這個條件，從這次起
+#   不再成立。
+# 前兩項只多加條件，授權條件（creator_id、participant_id 與 participant_type、deleted_at、
+# share_roots）一條都沒有拿掉，每一列進入的 bucket 與送到 client 的資料都不變。message_reactions
+# 把每一個 reaction 放進它所屬對話的那一個 bucket，不再放進它的訊息的 bucket。它不再讀
+# chat_messages.deleted_at，所以軟刪除的訊息的 reactions 也會送到對話的參與者；目前沒有任何
+# 程式軟刪除聊天訊息，而 Message PWA 只顯示它收到的訊息的 reactions。
+# 後端同一天對 page_body_owned 與 page_body_shared 的改動不在本檔：本檔還沒有頁面同步的 stream。
+# 載入順序：message_reactions 讀 chat_message_reactions.conversation_id。這個欄位由後端
+# database/migrations/2026_10_16_100000_a_reaction_knows_its_conversation.php 加上，舊的列從
+# 訊息補上，新的列由 App\ChatMessage\Models\MessageReaction 寫入。所以本檔只能在跑過這支
+# migration 的後端部署之後載入，而且要先以唯讀查詢確認沒有任何 reaction 的 conversation_id 是
+# null（SELECT count(*) FROM chat_message_reactions WHERE conversation_id IS NULL; 印出 0）：
+# 沒有這個欄位的 reaction 送不到任何 client。本檔選 chat_message_reactions.*，所以每一列同步的
+# reaction 會多出 conversation_id；Message PWA 的本機 schema 沒有宣告這個欄位，會忽略它。
+# 四條 task_panel_* 讀的四張表由後端的 2026_10_07_110000_a_task_conversation_has_a_task_panel
+# 建立，所以這四條只能在這支 migration 跑過之後載入；publication powersync 也要涵蓋這四張表，
+# replication 角色也要能讀（後端 docs/powersync/live-service.md 的
+# 「Release: keyed parent lookups (2026-10-16)」第 5 步）。
+# 仍然隨人成長的部分：my_conversations 與 my_participants 每一次查詢傳回這個人的每一筆參與
+# 記錄一列，也各為每一段對話開一個 bucket，所以每一段聊天對話佔兩個參數查詢結果與兩個 bucket。
+# Message PWA 只靠預設訂閱這兩條，所以兩條都要保留 auto_subscribe: true；少了這個標記，
+# Message PWA 就收不到聊天清單。在沒有設定的上限下，大約有 500 段聊天對話的人就連不上，所以
+# config.yaml.example 的 api.parameters 把兩個上限都設成 5000（規則 9）。服務只在啟動時讀
+# config.yaml 與本檔，所以正式環境的兩個檔案在同一次重新啟動時一起載入。
+# 下面十條 stream 的 query 與後端 docker/sail/powersync/sync-streams.yaml 的同名 stream 逐字相同；改其中一邊時，另一邊在同一次上線跟著改。
+# 本檔這次的內容變更會讓 PowerSync 換一版 sync rules、重做 snapshot。
+
 streams:
   # 使用者的對話列表 — 自動訂閱
   my_conversations:
@@ -118,6 +179,7 @@ streams:
       WHERE chat_conversation_participants.participant_id = auth.parameter('user_id')
         AND chat_conversation_participants.participant_type = auth.parameter('user_type')
         AND chat_conversations.deleted_at IS NULL
+        AND auth.parameter('share_roots') IS NULL
 
   # 使用者的參與者記錄 — 自動訂閱
   # 用 IN subquery 取代 self-join；避開 alias 問題
@@ -132,6 +194,7 @@ streams:
         WHERE participant_id = auth.parameter('user_id')
           AND participant_type = auth.parameter('user_type')
       )
+        AND auth.parameter('share_roots') IS NULL
 
   # 對話的訊息 — 按需訂閱
   conversation_messages:
@@ -143,27 +206,30 @@ streams:
       INNER JOIN chat_conversations
         ON chat_conversations.id = chat_messages.conversation_id
       WHERE chat_messages.conversation_id = subscription.parameter('conversation_id')
+        AND chat_conversation_participants.conversation_id = subscription.parameter('conversation_id')
+        AND chat_conversations.id = subscription.parameter('conversation_id')
         AND chat_conversation_participants.participant_id = auth.parameter('user_id')
         AND chat_conversation_participants.participant_type = auth.parameter('user_type')
         AND chat_messages.deleted_at IS NULL
         AND chat_conversations.deleted_at IS NULL
+        AND auth.parameter('share_roots') IS NULL
 
   # 訊息的 reactions — 按需訂閱
   message_reactions:
     query: |
       SELECT chat_message_reactions.*
       FROM chat_message_reactions
-      INNER JOIN chat_messages
-        ON chat_messages.id = chat_message_reactions.message_id
       INNER JOIN chat_conversation_participants
-        ON chat_conversation_participants.conversation_id = chat_messages.conversation_id
+        ON chat_conversation_participants.conversation_id = chat_message_reactions.conversation_id
       INNER JOIN chat_conversations
-        ON chat_conversations.id = chat_messages.conversation_id
-      WHERE chat_messages.conversation_id = subscription.parameter('conversation_id')
+        ON chat_conversations.id = chat_message_reactions.conversation_id
+      WHERE chat_message_reactions.conversation_id = subscription.parameter('conversation_id')
+        AND chat_conversation_participants.conversation_id = subscription.parameter('conversation_id')
+        AND chat_conversations.id = subscription.parameter('conversation_id')
         AND chat_conversation_participants.participant_id = auth.parameter('user_id')
         AND chat_conversation_participants.participant_type = auth.parameter('user_type')
-        AND chat_messages.deleted_at IS NULL
         AND chat_conversations.deleted_at IS NULL
+        AND auth.parameter('share_roots') IS NULL
 
   # 使用者自己的 AI 對話 — 自動訂閱
   my_ai_conversations:
@@ -183,6 +249,7 @@ streams:
       INNER JOIN ai_conversations
         ON ai_conversations.id = ai_messages.conversation_id
       WHERE ai_messages.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.id = subscription.parameter('conversation_id')
         AND ai_conversations.creator_id = auth.parameter('user_id')
         AND ai_messages.deleted_at IS NULL
         AND ai_conversations.deleted_at IS NULL
@@ -196,6 +263,7 @@ streams:
       INNER JOIN ai_conversations
         ON ai_conversations.id = ai_task_goals.conversation_id
       WHERE ai_task_goals.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.id = subscription.parameter('conversation_id')
         AND ai_conversations.creator_id = auth.parameter('user_id')
         AND ai_conversations.deleted_at IS NULL
         AND auth.parameter('share_roots') IS NULL
@@ -208,6 +276,7 @@ streams:
       INNER JOIN ai_conversations
         ON ai_conversations.id = ai_task_subtasks.conversation_id
       WHERE ai_task_subtasks.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.id = subscription.parameter('conversation_id')
         AND ai_conversations.creator_id = auth.parameter('user_id')
         AND ai_conversations.deleted_at IS NULL
         AND auth.parameter('share_roots') IS NULL
@@ -220,6 +289,7 @@ streams:
       INNER JOIN ai_conversations
         ON ai_conversations.id = ai_task_outputs.conversation_id
       WHERE ai_task_outputs.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.id = subscription.parameter('conversation_id')
         AND ai_conversations.creator_id = auth.parameter('user_id')
         AND ai_conversations.deleted_at IS NULL
         AND auth.parameter('share_roots') IS NULL
@@ -232,6 +302,7 @@ streams:
       INNER JOIN ai_conversations
         ON ai_conversations.id = ai_task_context_items.conversation_id
       WHERE ai_task_context_items.conversation_id = subscription.parameter('conversation_id')
+        AND ai_conversations.id = subscription.parameter('conversation_id')
         AND ai_conversations.creator_id = auth.parameter('user_id')
         AND ai_conversations.deleted_at IS NULL
         AND auth.parameter('share_roots') IS NULL
