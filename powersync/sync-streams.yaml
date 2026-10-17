@@ -1,6 +1,6 @@
 # Sync Streams 定義（edition 3 語法）
 #
-# PowerSync 1.26.1（@powersync/service-sync-rules 0.42.0）edition 3 函式 schema（grep 自 /app/packages/sync-rules/dist/compiler/sqlite.js:102）：
+# PowerSync 1.20.5 edition 3 函式 schema（grep 自 /app/packages/sync-rules/dist/compiler/sqlite.js:102）：
 #   合法 schema 只有 auth / subscription / connection，其他會回 "Invalid schema in function name"
 #   auth.user_id()                — JWT sub claim（字串；PHP controller 做 (string) 轉型）
 #   auth.parameter('x')           — JWT root-level 'x' 欄位（經 sqlite.js 405 行 desugar 為
@@ -18,7 +18,7 @@
 # 缺少 participant_type 檢查會讓其他 morph 類型（例：Admin、Employee）使用相同數字 id
 # 假冒 User 身分取得不屬於他們的對話/訊息。
 #
-# 重新部署備忘（2026-08-14）：本機 MySQL 由多個 app 共用，binlog 是整台 server 的。
+# 重新部署備忘（2026-08-14）：本機 MySQL 由多個專案共用，binlog 是整台 server 的。
 # 其他 schema 的 RENAME TABLE 會踩到 module-mysql BinLogListener.js:383 未做 null 檢查的
 # this.databaseFilter[schema](...)，導致 replicator 無限 crash-restart、checkpoint 永遠不前進。
 # 解法是修改本檔（任何內容變更皆可）觸發新版 sync rules，從當前 binlog 位置重做 snapshot。
@@ -42,7 +42,7 @@
 # 是為了讓那次重做從乾淨的位置開始。
 #
 # 上面兩則備忘寫的那個坑，在 PostgreSQL 上不會再發生，而且是結構上不會：
-# MySQL 的 binlog 是整台 server 一份，所以別的 app 的 schema 做 RENAME TABLE 會撞死
+# MySQL 的 binlog 是整台 server 一份，所以別的專案的 schema 做 RENAME TABLE 會撞死
 # 這裡的 replicator；PostgreSQL 的 replication slot 只屬於一個 database，
 # 平行測試用的 testing_test_1 .. testing_test_18 是各自獨立的 database，
 # 它們做什麼都碰不到這個 slot。docker/sail/mysql/local-speed.cnf 的 binlog_do_db
@@ -54,7 +54,7 @@
 
 # 時間變 UTC 備忘（2026-09-14）：PostgreSQL 的 173 個時間欄位（67 張表）全部從
 # naive timestamp 換成 timestamptz，存的是真 UTC，舊值以台北時間讀入
-# （後端 docs/adr/0092）。人看到的時刻沒有移動，變的是形狀。
+# （後端 docs/adr/0092、artisan db:times-to-utc）。人看到的時刻沒有移動，變的是形狀。
 #
 # **這次沒有改任何設定，是欄位型別讓 wire 換了形狀。**
 # 票上寫「把 ISO 8601 設定打開」，但那個設定叫 timestamps_iso8601，它的 fixedIn 是
@@ -78,49 +78,6 @@
 #
 # 本檔這次的內容變更是為了觸發新版 sync rules，讓 snapshot 從新形狀重做。
 
-# 欄位改名備忘（2026-09-27）：對話所屬專案的欄位現在是 chat_conversations.project_id，
-# 給專案成員看的分享等級現在是 project（後端 docs/adr/0111）。
-# 這裡的 query 讀的是 chat_conversations.*，兩者都沒有點名，所以 query 不用改。
-# 本檔這次的內容變更是為了讓 PowerSync 重做 snapshot，每一列都用新的欄位重新讀一次。
-# 更正（2026-10-06）：正式環境的 sync rules 在 fanswoo/laradock 的
-# powersync/sync-streams.yaml，對話的 stream 同樣用 `.*` 選欄位，並在上線時跟著本檔修改。
-
-# 頁面同步備忘（2026-10-06）：page_tree_owned、page_tree_shared、page_favorites 三個
-# stream 屬於頁面同步自己的連線（後端 docs/adr/0140），都不是預設訂閱，所以對話的連線
-# 與 Flutter app 一列也收不到。兩種 token 以 share_roots 這個 claim 區分：只有頁面同步的
-# token 帶它（空清單也算帶），對話的 token 從不帶。兩個方向都要擋：
-# - page_tree_owned、page_favorites 與 page_body_owned 要求 token 帶有 share_roots。
-#   對話的 token 帶的是同一個 sub，少了這個條件就能打開一個人自己的頁面。
-# - 頁面以外的每一個 stream 要求 token 不帶 share_roots（2026-10-07）：現在是對話的四個
-#   stream，之後新增的 stream 也一樣。頁面同步的 token 帶著同樣的 user_id 與 user_type，
-#   而發它的路由 GET /api/document/powersync/token 只檢查 documents 這個 Access Scope；
-#   少了這個條件，只取得 documents 的 token 就能讀到這個人所有的對話、參與者、訊息與
-#   reactions，而對話自己的 token 路由要求的是 chat。
-#   對話的 token 不帶 share_roots，所以 Message PWA 與 Flutter app 收到的列不變。
-# 每一個頁面 stream 都逐欄點名，樹的 stream 從不選 content（存起來的內容）或 body_written_at。
-# resources/js/__tests__/document/sync-config.test.ts 兩個方向都檢查：對話的 token 收不到
-# 任何頁面；頁面同步的 token 收不到任何對話的列。它也用頁面同步的 token 把頁面以外的每一個
-# stream 各訂閱兩次：一次不帶參數，一次把編譯後的本檔以名稱讀取的每一個 subscription 與
-# connection 參數都設成一個值；任何一次開了 bucket 或做了 lookup，測試就失敗。以名稱讀取
-# 指 subscription.parameter('<name>')、subscription.parameters() ->> '<name>'（或 ->）
-# 與 connection 的同樣寫法，名稱取自編譯後的 sync plan，與 YAML 的引號寫法無關。以其他
-# 方式讀參數（例如 json_extract(subscription.parameters(), '$.<name>')）、或只在參數是
-# 特定值時才開 bucket 的 stream，這項檢查抓不到，所以正式環境中對話的四個 stream 與五個
-# 頁面 stream 以外的每一個 stream，都要由人讀它外層的 WHERE。
-# 它用釘住的 image 所跑的那一版 library 編譯本檔，所以 compose.yaml 的
-# image 版本與 package.json 的 library 版本要一起改。
-# 正式環境的對話 stream 逐欄點名，所以這個條件由人在上線時加進正式環境每一個不是頁面
-# stream 的 query（docs/powersync/live-service.md 的規則 7 與「Release: the page sync」第 6 步）。
-
-# 頁面內文備忘（2026-10-07）：page_body_owned 與 page_body_shared 也屬於頁面同步，
-# 每一個「離線可用」或最近打開的頁面各訂閱一次，帶著它的 page_id，從不是預設訂閱。
-# 存起來的內容那一段 query 用了別名，這是上面「禁用 SQL alias」備忘的刻意例外：
-# content 與 body_written_at（內文寫在編輯器之外的標記，後端 docs/adr/0137）落在
-# page_cached_copies 這張 client table，不會進任何一列頁面樹。編輯紀錄那一段 query
-# 的 document_pages.id 條件讓每一次查找只對到一列頁面；兩個 stream 的編輯紀錄共用
-# 每一頁的同一個 bucket。resources/js/__tests__/document/sync-config.test.ts 會編譯並
-# 執行這兩個 stream。
-
 # AI 對話分表備忘（2026-10-06）：AI 對話與它的訊息從 chat_* 表搬到自己的兩張表
 # ai_conversations 與 ai_messages（後端 docs/adr/0141-an-ai-conversation-has-its-own-two-tables-and-old-app-builds-break-for-a-short-time.md）。
 # 下面多了兩條 stream：my_ai_conversations（自動訂閱）與 ai_conversation_messages
@@ -131,79 +88,11 @@
 # 兩條都不是頁面 stream，所以照頁面同步備忘的規則，要求 token 不帶 share_roots。
 # 原本四條 stream 一字不改；上線的搬移步驟跑完之後，AI 對話的列就不在它們讀的表裡。
 # 本檔這次的內容變更會讓 PowerSync 換一版 sync rules、重做 snapshot。
-
-# 任務對話側欄備忘（2026-10-13）：任務對話的側欄有四張表：ai_task_goals（目標）、
-# ai_task_subtasks（子任務）、ai_task_outputs（產出）與 ai_task_context_items（背景資料）
-# （後端 docs/adr/0143-a-task-conversation-works-in-the-background-and-writes-when-a-piece-of-work-is-done.md）。
-# 下面多了四條 stream，一張表一條：task_panel_goals、task_panel_subtasks、
-# task_panel_outputs 與 task_panel_context_items，都依 conversation_id 按需訂閱。
-# 四條 query 都 join ai_conversations，比對 ai_conversations.creator_id = auth.parameter('user_id')，
-# 只有開始這段任務對話的人同步得到；對話被軟刪除之後，它的側欄也不再同步。
-# 四條都不是頁面 stream，所以照頁面同步備忘的規則，要求 token 不帶 share_roots。
-# 四張表沒有 deleted_at 欄位：一列被刪掉就是真的刪掉，PowerSync 會從 client 移除它。
-# 本檔這次的內容變更會讓 PowerSync 換一版 sync rules、重做 snapshot。
-
-# 參數查詢與 bucket 上限備忘（2026-10-16）：PowerSync 1.26.1 對每一條同步連線有兩個上限，
-# 沒有設定時都是 1000：所有參數查詢傳回的列數加總（max_parameter_query_results），與連線上
-# 不重複的 bucket 數（max_buckets_per_connection）。超過任何一個，服務就回 [PSYNC_S2305]
-# （Too many parameter query results 或 Too many buckets），整條連線以 "stream error" 結束，
-# 這條連線上的每一條 stream 都同步不到：對話、AI 對話清單、AI 對話的訊息與任務側欄都一樣，
-# client 重新連線也在同一處失敗。
-# 按需訂閱的 stream 每一次訂閱都查一次它 join 的父表，而 powersync-js 在頁面離開對話之後
-# 仍保留訂閱，直到訂閱的 TTL 結束。ai_conversation_messages 與四條 task_panel_* 原本只以
-# ai_conversations.creator_id = auth.parameter('user_id') 查父表，所以每一次訂閱都傳回這個人
-# 的每一段 AI 對話：有 139 段 AI 對話的人，打開七段 AI 對話與一段任務對話的側欄就超過上限，
-# 每一段打開的任務對話再加四次。conversation_messages 與 message_reactions 查
-# chat_conversations 時沒有任何鍵，每一次訂閱都傳回所有人每一段未刪除的內部與客戶對話；查
-# chat_conversation_participants 時只以人為鍵，傳回這個人的每一筆參與記錄。message_reactions
-# 另外以對話查 chat_messages：訂閱的對話中每一則未刪除的訊息傳回一列，也各開一個 bucket，
-# 因為 bucket 只能以 message_id 區分，所以一段有 1200 則訊息的對話，一次訂閱就超過兩個上限。
-# 規則：按需訂閱的 stream join 父表時，父表的條件一定要有一個以 subscription 參數為鍵的
-# 等式（例如 ai_conversations.id = subscription.parameter('conversation_id')），不能只以
-# auth 參數為鍵，也不能沒有鍵；選出的表也要有以 subscription 參數比對的欄位，讓 bucket 以
-# 訂閱的對話劃分，不以父表或對話中的每一列劃分。這樣每一次訂閱只開一個 bucket，對每一張父表
-# 只查到一列，數量不隨這個人的對話數或對話的訊息數成長。
-# 本次的改動：
-# - ai_conversation_messages 與四條 task_panel_* 比對 ai_conversations.id；
-# - conversation_messages 比對 chat_conversation_participants.conversation_id 與
-#   chat_conversations.id；
-# - message_reactions 以 reaction 自己的 chat_message_reactions.conversation_id 比對訂閱的
-#   對話，不再 join chat_messages，並以同一個欄位 join、比對 chat_conversation_participants
-#   與 chat_conversations。這個欄位由
-#   database/migrations/2026_10_16_100000_a_reaction_knows_its_conversation.php 加上，舊的列
-#   從訊息補上，新的列由 App\ChatMessage\Models\MessageReaction 寫入。
-# 前兩項只多加條件，授權條件（creator_id、participant_id 與 participant_type、deleted_at、
-# share_roots）一條都沒有拿掉，每一列進入的 bucket 與送到 client 的資料都不變（以
-# @powersync/service-sync-rules 0.42.0 逐列比對）。message_reactions 不再讀
-# chat_messages.deleted_at，所以軟刪除的訊息的 reactions 也會送到對話的參與者；目前沒有任何
-# 程式軟刪除聊天訊息，而 Message PWA 只顯示它收到的訊息的 reactions（message-hydration.ts
-# 以訊息的 id 查 reactions）。
-# 仍然隨人成長的部分：my_conversations 與 my_participants 每一次查詢傳回這個人的每一筆參與
-# 記錄一列，也各為每一段對話開一個 bucket，所以每一段聊天對話佔兩個參數查詢結果與兩個 bucket。
-# Message PWA 只靠預設訂閱這兩條，不再以名稱另外訂閱：服務把以名稱的訂閱與預設訂閱分開查詢，
-# 以名稱再訂閱一次，每一段聊天對話就佔四個參數查詢結果。所以兩條都要保留 auto_subscribe: true；
-# 少了這個標記，Message PWA 就收不到聊天清單。在沒有設定的上限下，大約有 500 段
-# 聊天對話的人就連不上，所以本機的 config.yaml 把兩個上限都設成 5000，正式環境的設定照
-# docs/powersync/live-service.md 的規則 9 一起改。
-# 頁面同步的連線有同樣的兩個上限。page_body_owned 與 page_body_shared 存起來的內容那一段
-# query 原本以列上的欄位比對 token（owner_id = auth.user_id() 與
-# share_root_id IN auth.parameter('share_roots')），不做查找，所以 page_body_owned 替每一個
-# 保留的頁面另開一個 bucket，page_body_shared 替每一個保留的頁面、token 清單上的每一個分享
-# 源頭頁各開一個 bucket：token 列出 250 個分享源頭頁時，保留 3 個頁面，連線上的 bucket 就
-# 超過 1000 個，整條頁面同步的連線停止。兩段 query 現在都 join document_pages，以
-# document_pages.id 查找，並在查找到的列上比對擁有者或分享源頭頁，與編輯紀錄那一段相同；兩個
-# stream 的編輯紀錄與存起來的內容因此共用每一頁的同一個 bucket，一個保留的頁面佔一個 bucket
-# 與兩個參數查詢結果。每一列送到的人不變：擁有者仍收到自己頁面樹中的頁面（含已刪除的頁面），
-# token 清單列出分享源頭頁的人仍只收到未刪除的頁面。一台裝置打開「離線可用」的頁面最多
-# KEPT_MARK_LIMIT 個（resources/js/workspace/document/local-store/kept-offline.ts）；
-# resources/js/__tests__/document/sync-config.test.ts 以這個數量加上最近打開的頁面、與 token
-# 最多列出的分享源頭頁數，檢查這條連線用不到沒有設定時的上限的一半。
-# resources/js/__tests__/document/sync-config-parameter-lookups.test.ts 照服務載入本檔的方式
-# 與 Message PWA 的訂閱方式，計算每一次查找傳回的列數與連線上的 bucket 數。它從編譯後的本檔
-# 取出每一條不是預設訂閱、讀 subscription.parameter('conversation_id') 並做查找的 stream；
-# 任何一次查找讀了對話與參與記錄以外的表、不以訂閱的對話為鍵、一次訂閱傳回多於一列或開了
-# 多於一個 bucket，或 Message PWA 的連線超過上限，測試就失敗。
-# 本檔這次的內容變更會讓 PowerSync 換一版 sync rules、重做 snapshot。
+# 下面兩條 AI stream 與後端 docker/sail/powersync/sync-streams.yaml 的同名 stream
+# 逐字相同。後端那一份另有頁面同步計畫的改動（第 3 行的版本、頁面同步備忘、頁面內文
+# 備忘、四條聊天 stream 的 share_roots 條件與五條頁面 stream），這一份還沒有。聊天的
+# token 不帶 share_roots，所以兩條 AI stream 的這個條件對兩個 client 一律成立；帶
+# share_roots 的頁面同步 token 讀不到它們。改其中一邊時，另一邊在同一次上線跟著改。
 
 streams:
   # 使用者的對話列表 — 自動訂閱
@@ -217,7 +106,6 @@ streams:
       WHERE chat_conversation_participants.participant_id = auth.parameter('user_id')
         AND chat_conversation_participants.participant_type = auth.parameter('user_type')
         AND chat_conversations.deleted_at IS NULL
-        AND auth.parameter('share_roots') IS NULL
 
   # 使用者的參與者記錄 — 自動訂閱
   # 用 IN subquery 取代 self-join；避開 alias 問題
@@ -232,7 +120,6 @@ streams:
         WHERE participant_id = auth.parameter('user_id')
           AND participant_type = auth.parameter('user_type')
       )
-        AND auth.parameter('share_roots') IS NULL
 
   # 對話的訊息 — 按需訂閱
   conversation_messages:
@@ -244,31 +131,27 @@ streams:
       INNER JOIN chat_conversations
         ON chat_conversations.id = chat_messages.conversation_id
       WHERE chat_messages.conversation_id = subscription.parameter('conversation_id')
-        AND chat_conversation_participants.conversation_id = subscription.parameter('conversation_id')
-        AND chat_conversations.id = subscription.parameter('conversation_id')
         AND chat_conversation_participants.participant_id = auth.parameter('user_id')
         AND chat_conversation_participants.participant_type = auth.parameter('user_type')
         AND chat_messages.deleted_at IS NULL
         AND chat_conversations.deleted_at IS NULL
-        AND auth.parameter('share_roots') IS NULL
 
   # 訊息的 reactions — 按需訂閱
-  # 以 reaction 自己的 conversation_id 劃分 bucket：一次訂閱只開一個 bucket，不論對話有幾則訊息
   message_reactions:
     query: |
       SELECT chat_message_reactions.*
       FROM chat_message_reactions
+      INNER JOIN chat_messages
+        ON chat_messages.id = chat_message_reactions.message_id
       INNER JOIN chat_conversation_participants
-        ON chat_conversation_participants.conversation_id = chat_message_reactions.conversation_id
+        ON chat_conversation_participants.conversation_id = chat_messages.conversation_id
       INNER JOIN chat_conversations
-        ON chat_conversations.id = chat_message_reactions.conversation_id
-      WHERE chat_message_reactions.conversation_id = subscription.parameter('conversation_id')
-        AND chat_conversation_participants.conversation_id = subscription.parameter('conversation_id')
-        AND chat_conversations.id = subscription.parameter('conversation_id')
+        ON chat_conversations.id = chat_messages.conversation_id
+      WHERE chat_messages.conversation_id = subscription.parameter('conversation_id')
         AND chat_conversation_participants.participant_id = auth.parameter('user_id')
         AND chat_conversation_participants.participant_type = auth.parameter('user_type')
+        AND chat_messages.deleted_at IS NULL
         AND chat_conversations.deleted_at IS NULL
-        AND auth.parameter('share_roots') IS NULL
 
   # 使用者自己的 AI 對話 — 自動訂閱
   my_ai_conversations:
@@ -288,181 +171,10 @@ streams:
       INNER JOIN ai_conversations
         ON ai_conversations.id = ai_messages.conversation_id
       WHERE ai_messages.conversation_id = subscription.parameter('conversation_id')
-        AND ai_conversations.id = subscription.parameter('conversation_id')
         AND ai_conversations.creator_id = auth.parameter('user_id')
         AND ai_messages.deleted_at IS NULL
         AND ai_conversations.deleted_at IS NULL
         AND auth.parameter('share_roots') IS NULL
-
-  # 任務對話的目標 — 按需訂閱
-  task_panel_goals:
-    query: |
-      SELECT ai_task_goals.*
-      FROM ai_task_goals
-      INNER JOIN ai_conversations
-        ON ai_conversations.id = ai_task_goals.conversation_id
-      WHERE ai_task_goals.conversation_id = subscription.parameter('conversation_id')
-        AND ai_conversations.id = subscription.parameter('conversation_id')
-        AND ai_conversations.creator_id = auth.parameter('user_id')
-        AND ai_conversations.deleted_at IS NULL
-        AND auth.parameter('share_roots') IS NULL
-
-  # 任務對話的子任務 — 按需訂閱
-  task_panel_subtasks:
-    query: |
-      SELECT ai_task_subtasks.*
-      FROM ai_task_subtasks
-      INNER JOIN ai_conversations
-        ON ai_conversations.id = ai_task_subtasks.conversation_id
-      WHERE ai_task_subtasks.conversation_id = subscription.parameter('conversation_id')
-        AND ai_conversations.id = subscription.parameter('conversation_id')
-        AND ai_conversations.creator_id = auth.parameter('user_id')
-        AND ai_conversations.deleted_at IS NULL
-        AND auth.parameter('share_roots') IS NULL
-
-  # 任務對話的產出 — 按需訂閱
-  task_panel_outputs:
-    query: |
-      SELECT ai_task_outputs.*
-      FROM ai_task_outputs
-      INNER JOIN ai_conversations
-        ON ai_conversations.id = ai_task_outputs.conversation_id
-      WHERE ai_task_outputs.conversation_id = subscription.parameter('conversation_id')
-        AND ai_conversations.id = subscription.parameter('conversation_id')
-        AND ai_conversations.creator_id = auth.parameter('user_id')
-        AND ai_conversations.deleted_at IS NULL
-        AND auth.parameter('share_roots') IS NULL
-
-  # 任務對話的背景資料 — 按需訂閱
-  task_panel_context_items:
-    query: |
-      SELECT ai_task_context_items.*
-      FROM ai_task_context_items
-      INNER JOIN ai_conversations
-        ON ai_conversations.id = ai_task_context_items.conversation_id
-      WHERE ai_task_context_items.conversation_id = subscription.parameter('conversation_id')
-        AND ai_conversations.id = subscription.parameter('conversation_id')
-        AND ai_conversations.creator_id = auth.parameter('user_id')
-        AND ai_conversations.deleted_at IS NULL
-        AND auth.parameter('share_roots') IS NULL
-
-  # 自己擁有的頁面樹（含已刪除與封存的頁面）— 按需訂閱
-  page_tree_owned:
-    query: |
-      SELECT document_pages.id,
-        document_pages.parent_id,
-        document_pages.root_id,
-        document_pages.share_root_id,
-        document_pages.inherits,
-        document_pages.title,
-        document_pages.slug,
-        document_pages.position,
-        document_pages.user_id,
-        document_pages.owner_id,
-        document_pages.project_id,
-        document_pages.public_at,
-        document_pages.settings,
-        document_pages.archived_at,
-        document_pages.created_at,
-        document_pages.updated_at,
-        document_pages.deleted_at
-      FROM document_pages
-      WHERE document_pages.owner_id = auth.user_id()
-        AND auth.parameter('share_roots') IS NOT NULL
-
-  # 別人分享給我的頁面（token 清單上的分享源頭頁）— 按需訂閱
-  page_tree_shared:
-    query: |
-      SELECT document_pages.id,
-        document_pages.parent_id,
-        document_pages.root_id,
-        document_pages.share_root_id,
-        document_pages.inherits,
-        document_pages.title,
-        document_pages.slug,
-        document_pages.position,
-        document_pages.user_id,
-        document_pages.owner_id,
-        document_pages.project_id,
-        document_pages.public_at,
-        document_pages.settings,
-        document_pages.archived_at,
-        document_pages.created_at,
-        document_pages.updated_at,
-        document_pages.deleted_at
-      FROM document_pages
-      WHERE document_pages.share_root_id IN auth.parameter('share_roots')
-        AND document_pages.deleted_at IS NULL
-
-  # 自己加星號的頁面 — 按需訂閱
-  page_favorites:
-    query: |
-      SELECT CAST(document_page_favorites.id AS TEXT) AS id,
-        document_page_favorites.page_id,
-        document_page_favorites.user_id
-      FROM document_page_favorites
-      WHERE document_page_favorites.user_id = auth.user_id()
-        AND auth.parameter('share_roots') IS NOT NULL
-
-  # 頁面內文（自己擁有的頁面樹）— 按需訂閱，一次一頁
-  page_body_owned:
-    queries:
-      - |
-        SELECT CAST(shareable_updates.id AS TEXT) AS id,
-          shareable_updates.shareable_type,
-          shareable_updates.shareable_id,
-          shareable_updates.payload
-        FROM shareable_updates
-        INNER JOIN document_pages
-          ON document_pages.id = shareable_updates.shareable_id
-        WHERE shareable_updates.shareable_type = 'document-page'
-          AND shareable_updates.shareable_id = subscription.parameter('page_id')
-          AND document_pages.id = subscription.parameter('page_id')
-          AND document_pages.owner_id = auth.user_id()
-          AND auth.parameter('share_roots') IS NOT NULL
-      # 這裡的別名是刻意的：存起來的內容與 body_written_at 落在 page_cached_copies，
-      # 不會出現在任何一列頁面樹裡。
-      - |
-        SELECT page_cached_copies.id,
-          page_cached_copies.content,
-          page_cached_copies.body_written_at
-        FROM document_pages AS "page_cached_copies"
-        INNER JOIN document_pages
-          ON document_pages.id = page_cached_copies.id
-        WHERE page_cached_copies.id = subscription.parameter('page_id')
-          AND document_pages.id = subscription.parameter('page_id')
-          AND document_pages.owner_id = auth.user_id()
-          AND auth.parameter('share_roots') IS NOT NULL
-
-  # 頁面內文（別人分享的頁面）— 按需訂閱，一次一頁
-  page_body_shared:
-    queries:
-      - |
-        SELECT CAST(shareable_updates.id AS TEXT) AS id,
-          shareable_updates.shareable_type,
-          shareable_updates.shareable_id,
-          shareable_updates.payload
-        FROM shareable_updates
-        INNER JOIN document_pages
-          ON document_pages.id = shareable_updates.shareable_id
-        WHERE shareable_updates.shareable_type = 'document-page'
-          AND shareable_updates.shareable_id = subscription.parameter('page_id')
-          AND document_pages.id = subscription.parameter('page_id')
-          AND document_pages.share_root_id IN auth.parameter('share_roots')
-          AND document_pages.deleted_at IS NULL
-      # 這裡的別名是刻意的：存起來的內容與 body_written_at 落在 page_cached_copies，
-      # 不會出現在任何一列頁面樹裡。
-      - |
-        SELECT page_cached_copies.id,
-          page_cached_copies.content,
-          page_cached_copies.body_written_at
-        FROM document_pages AS "page_cached_copies"
-        INNER JOIN document_pages
-          ON document_pages.id = page_cached_copies.id
-        WHERE page_cached_copies.id = subscription.parameter('page_id')
-          AND document_pages.id = subscription.parameter('page_id')
-          AND document_pages.share_root_id IN auth.parameter('share_roots')
-          AND document_pages.deleted_at IS NULL
 
 config:
   edition: 3
